@@ -13,8 +13,6 @@ module "vpc" {
   vpc_name        = var.vpc_name
   private_subnets = module.vpc.private_subnets
   public_subnets  = module.vpc.public_subnets
-  nat_ips         = module.vpc.nat_ips
-  nat_gateway     = module.vpc.nat_gateway
 }
 
 module "ec2" {

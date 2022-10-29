@@ -1,8 +1,7 @@
 data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "k8s" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
+  cidr_block = var.vpc_cidr
 
   tags = {
     Name = var.vpc_name
@@ -49,46 +48,16 @@ resource "aws_route_table" "public_routes" {
   }
 }
 
+resource "aws_route" "route_k8s" {
+  route_table_id         = aws_route_table.public_routes.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.k8s_itg.id
+}
+
 resource "aws_route_table_association" "public" {
   count          = length(var.public_subnets)
   subnet_id      = var.public_subnets[count.index]
   route_table_id = aws_route_table.public_routes.id
-}
-
-resource "aws_eip" "nat_ips" {
-  count = length(var.public_subnets)
-  vpc   = true
-
-  tags = {
-    Name = "NAT-IP-${count.index + 1}"
-  }
-}
-
-resource "aws_nat_gateway" "k8s_nat" {
-  count         = length(var.private_subnets)
-  allocation_id = var.nat_ips[count.index]
-  subnet_id     = var.public_subnets[count.index]
-}
-
-resource "aws_route_table" "private_routes" {
-  count      = length(var.private_subnets)
-  vpc_id     = aws_vpc.k8s.id
-  depends_on = [aws_nat_gateway.k8s_nat]
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.nat_gateway[count.index]
-  }
-
-  tags = {
-    Name = "Private"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(var.private_subnets)
-  subnet_id      = var.private_subnets[count.index]
-  route_table_id = aws_route_table.private_routes[count.index].id
 }
 
 resource "aws_security_group" "allow_ssh" {
@@ -100,6 +69,69 @@ resource "aws_security_group" "allow_ssh" {
     from_port        = 22
     to_port          = 22
     protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Habilita ICMP"
+    from_port        = -1
+    to_port          = -1
+    protocol         = "icmp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Kubernetes API server"
+    from_port        = 6443
+    to_port          = 6443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "etcd server client API"
+    from_port        = 2379
+    to_port          = 2380
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Kubelet API, kube-scheduler, kube-controller-manager"
+    from_port        = 10250
+    to_port          = 10252
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "NodePorts"
+    from_port        = 30000
+    to_port          = 32767
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "WeaveCNI"
+    from_port        = 6783
+    to_port          = 6783
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "WeaveCNI"
+    from_port        = 6783
+    to_port          = 9784
+    protocol         = "udp"
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
